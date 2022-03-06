@@ -34,10 +34,12 @@ ENV KLEE_RUNTIME_BUILD="Debug+Asserts"
 LABEL maintainer="KLEE Developers"
 
 
+
+
 # TODO remove adding sudo package
 # Create ``klee`` user for container with password ``klee``.
 # and give it password-less sudo access (temporarily so we can use the CI scripts)
-RUN apt update && DEBIAN_FRONTEND=noninteractive apt -y --no-install-recommends install sudo emacs-nox vim-nox file python3-dateutil doxygen && \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt -y --no-install-recommends install sudo curl emacs-nox vim-nox file python3-dateutil doxygen git && \
     rm -rf /var/lib/apt/lists/* && \
     useradd -m klee && \
     echo klee:klee | chpasswd && \
@@ -51,14 +53,23 @@ COPY --chown=klee:klee . /tmp/klee_src/
 RUN /tmp/klee_src/scripts/build/build.sh --debug --install-system-deps klee && chown -R klee:klee /tmp/klee_build* && pip3 install flask wllvm && \
     rm -rf /var/lib/apt/lists/*
 
+# Get Rust and use -y to hide confirmation prompt
+RUN curl --proto '=https' --tlsv1.2 -sSf -o $HOME/rustup-init.sh https://sh.rustup.rs
+RUN sh $HOME/rustup-init.sh -y 
+
 ENV PATH="$PATH:/tmp/llvm-90-install_O_D_A/bin:/home/klee/klee_build/bin"
 ENV BASE=/tmp
 
 # Add KLEE header files to system standard include folder
 RUN /bin/bash -c 'ln -s ${BASE}/klee_src/include/klee /usr/include/'
 
+RUN apt clean
+
 USER klee
 WORKDIR /home/klee
+
+RUN echo "sudo su && source /root/.cargo/env" >> /home/klee/.bashrc
+
 ENV LD_LIBRARY_PATH /home/klee/klee_build/lib/
 
 # Add KLEE binary directory to PATH
@@ -66,3 +77,9 @@ RUN /bin/bash -c 'ln -s ${BASE}/klee_src /home/klee/ && ln -s ${BASE}/klee_build
 
 # TODO Remove when STP is fixed
 RUN /bin/bash -c 'echo "export LD_LIBRARY_PATH=$(cd ${BASE}/metaSMT-*-deps/stp-git-basic/lib/ && pwd):$LD_LIBRARY_PATH" >> /home/klee/.bashrc'
+
+# install cargo-klee from https://gitlab.henriktjader.com/pln/cargo-klee
+RUN git clone https://gitlab.henriktjader.com/pln/cargo-klee.git
+
+# minimal working example of rust
+RUN echo "fn main() {\nprintln!(\"Hello World From Rust!\");\n}" >> hello.rs
